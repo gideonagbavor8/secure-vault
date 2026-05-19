@@ -1,0 +1,89 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  STANDARD
+  ADMIN
+}
+
+model User {
+  id             String          @id @default(uuid()) @db.Uuid
+  email          String          @unique
+  passwordHash   String
+  isVerified     Boolean         @default(false)
+  totpSecret     String?
+  isTotpEnabled  Boolean         @default(false)
+  role           Role            @default(STANDARD)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  vaults         Vault[]
+  auditLogs      AuditLog[]
+  refreshTokens  RefreshToken[]
+  passwordResets PasswordReset[]
+}
+
+model Vault {
+  id             String          @id @default(uuid()) @db.Uuid
+  userId         String          @db.Uuid
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  colour         String?
+  icon           String?
+  deletedAt      DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  credentials    Credential[]
+}
+
+model Credential {
+  id             String          @id @default(uuid()) @db.Uuid
+  vaultId        String          @db.Uuid
+  vault          Vault           @relation(fields: [vaultId], references: [id], onDelete: Cascade)
+  name           String
+  usernameEnc    String
+  passwordEnc    String
+  urlEnc         String?
+  notesEnc       String?
+  tags           String[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model AuditLog {
+  id             String          @id @default(uuid()) @db.Uuid
+  userId         String          @db.Uuid
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action         String
+  ipAddress      String
+  userAgent      String?
+  metadata       Json?
+  createdAt      DateTime        @default(now())
+}
+
+model RefreshToken {
+  id             String          @id @default(uuid()) @db.Uuid
+  userId         String          @db.Uuid
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash      String          @unique
+  expiresAt      DateTime
+  revoked        Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+}
+
+model PasswordReset {
+  id             String          @id @default(uuid()) @db.Uuid
+  userId         String          @db.Uuid
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash      String          @unique
+  expiresAt      DateTime
+  used           Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+}
