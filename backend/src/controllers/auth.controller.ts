@@ -2,8 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { hashPassword, comparePassword } from '../utils/hash';
-import { generateAccessToken, generateRefreshToken } from '../utils/jwt';
+import { generateAccessToken, generateRefreshToken, generate2FATempToken, verify2FATempToken } from '../utils/jwt';
 import { logEvent } from '../utils/auditLogger';
+import { generateSecret, generateURI, verify } from 'otplib';
+import QRCode from 'qrcode';
+import bcrypt from 'bcrypt';
 
 // Helper to manually parse cookies from headers without requiring external cookie-parser
 function getCookie(cookieString: string | undefined, name: string): string | null {
@@ -118,6 +121,16 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
 
     // Reset failed login attempt tracker on successful verification
     loginAttemptsStore.delete(emailLower);
+
+    // If 2FA is enabled, return a short-lived temp token
+    if (user.isTotpEnabled) {
+      const tempToken = generate2FATempToken({ userId: user.id });
+      res.status(200).json({
+        requiresTwoFactor: true,
+        tempToken,
+      });
+      return;
+    }
 
     // Generate credentials
     const accessToken = generateAccessToken({
@@ -297,6 +310,264 @@ export async function refreshToken(req: Request, res: Response, next: NextFuncti
     });
 
     res.status(200).json({ accessToken: newAccessToken });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Helper to generate 8 random 10-character alphanumeric backup codes.
+ */
+function generateBackupCodes(): string[] {
+  const codes: string[] = [];
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i < 8; i++) {
+    let code = '';
+    for (let j = 0; j < 10; j++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    codes.push(code);
+  }
+  return codes;
+}
+
+/**
+ * Handle 2FA setup.
+ */
+export async function setup2FA(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const userId = req.user!.userId;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const secret = generateSecret();
+
+    // Store secret temporarily but keep isTotpEnabled false
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        totpSecret: secret,
+        isTotpEnabled: false,
+      },
+    });
+
+    const uri = generateURI({
+      issuer: 'SecureVault',
+      label: user.email,
+      secret,
+    });
+    const qrCode = await QRCode.toDataURL(uri);
+
+    await logEvent({
+      userId,
+      action: '2FA_SETUP_INITIATED',
+      ipAddress: req.ip || '127.0.0.1',
+      userAgent: req.headers['user-agent'],
+    });
+
+    res.status(200).json({ qrCode, secret });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Handle 2FA verification and enabling.
+ */
+export async function verify2FA(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { token } = req.body;
+    const userId = req.user!.userId;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || !user.totpSecret) {
+      res.status(400).json({ error: "2FA setup has not been initiated" });
+      return;
+    }
+
+    const { valid: isValid } = await verify({ token, secret: user.totpSecret });
+    if (!isValid) {
+      res.status(400).json({ error: "Invalid 2FA code" });
+      return;
+    }
+
+    // Set isTotpEnabled true on user
+    await prisma.user.update({
+      where: { id: userId },
+      data: { isTotpEnabled: true },
+    });
+
+    // Generate 8 one-time backup codes
+    const plaintextCodes = generateBackupCodes();
+
+    // Hash backup codes with cost 10 using bcrypt and save to BackupCode table
+    const backupCodePromises = plaintextCodes.map(async (code) => {
+      const codeHash = await bcrypt.hash(code, 10);
+      return prisma.backupCode.create({
+        data: {
+          userId,
+          codeHash,
+          used: false,
+        },
+      });
+    });
+    await Promise.all(backupCodePromises);
+
+    await logEvent({
+      userId,
+      action: '2FA_ENABLED',
+      ipAddress: req.ip || '127.0.0.1',
+      userAgent: req.headers['user-agent'],
+    });
+
+    res.status(200).json({
+      message: "2FA enabled",
+      backupCodes: plaintextCodes,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Handle 2FA disable.
+ */
+export async function disable2FA(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { password } = req.body;
+    const userId = req.user!.userId;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const isPasswordValid = await comparePassword(password, user.passwordHash);
+    if (!isPasswordValid) {
+      res.status(401).json({ error: "Invalid password" });
+      return;
+    }
+
+    // Disable 2FA
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        isTotpEnabled: false,
+        totpSecret: null,
+      },
+    });
+
+    // Delete backup codes for this user
+    await prisma.backupCode.deleteMany({
+      where: { userId },
+    });
+
+    await logEvent({
+      userId,
+      action: '2FA_DISABLED',
+      ipAddress: req.ip || '127.0.0.1',
+      userAgent: req.headers['user-agent'],
+    });
+
+    res.status(200).json({ message: "2FA disabled successfully" });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Verify tempToken and TOTP token during login.
+ */
+export async function twoFactorAuthenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { tempToken, token } = req.body;
+
+    if (!tempToken) {
+      res.status(400).json({ error: "Temporary token is missing" });
+      return;
+    }
+
+    let decoded: { userId: string };
+    try {
+      decoded = verify2FATempToken(tempToken);
+    } catch (err) {
+      res.status(401).json({ error: "Invalid or expired temporary token" });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+    });
+
+    if (!user || !user.totpSecret || !user.isTotpEnabled) {
+      res.status(400).json({ error: "2FA is not enabled for this account" });
+      return;
+    }
+
+    const { valid: isValid } = await verify({ token, secret: user.totpSecret });
+    if (!isValid) {
+      res.status(400).json({ error: "Invalid 2FA code" });
+      return;
+    }
+
+    // Success - generate full session tokens
+    const accessToken = generateAccessToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    });
+    const refreshTokenVal = generateRefreshToken({ userId: user.id });
+
+    // Hash refresh token using SHA-256 before storing
+    const tokenHash = crypto.createHash('sha256').update(refreshTokenVal).digest('hex');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+    await prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt,
+      },
+    });
+
+    // Set refresh token in HTTP-only, Secure, SameSite=Strict cookie
+    res.cookie('refreshToken', refreshTokenVal, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    // Log 2FA login success
+    await logEvent({
+      userId: user.id,
+      action: '2FA_LOGIN_SUCCESS',
+      ipAddress: req.ip || '127.0.0.1',
+      userAgent: req.headers['user-agent'],
+    });
+
+    res.status(200).json({
+      accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      },
+    });
   } catch (error) {
     next(error);
   }

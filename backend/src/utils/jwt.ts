@@ -65,3 +65,31 @@ export function verifyRefreshToken(token: string): RefreshTokenPayload {
   const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] });
   return decoded as RefreshTokenPayload;
 }
+
+/**
+ * Generates a short-lived 2FA temporary token (JWT) expiring in 5 minutes.
+ */
+export function generate2FATempToken(payload: { userId: string }): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is not defined.');
+  }
+
+  return jwt.sign(payload, secret, {
+    expiresIn: '5m',
+    algorithm: 'HS256',
+  });
+}
+
+/**
+ * Verifies a short-lived 2FA temporary token and returns the decoded payload, or throws an error.
+ */
+export function verify2FATempToken(token: string): { userId: string } {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is not defined.');
+  }
+
+  const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] });
+  return decoded as { userId: string };
+}
