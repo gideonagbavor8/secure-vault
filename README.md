@@ -92,18 +92,20 @@ secure-vault/
 
 ## Environment Variables
 
-| Variable | Description | Example |
-| :--- | :--- | :--- |
-| `DATABASE_URL` | PostgreSQL connection string for Prisma. | `postgresql://securevault:securevault@localhost:5432/securevaultdb` |
-| `PORT` | Local binding port for the Express application. | `5000` |
-| `NODE_ENV` | Application environment state. | `development` |
-| `FRONTEND_URL` | Client URL configuration for backend CORS routing. | `http://localhost:3000` |
-| `BCRYPT_COST_FACTOR` | Work factor multiplier for password hashing. | `12` |
-| `JWT_SECRET` | Secret key used to sign Access Tokens. | `supersecretjwtkeyforlocaldev123!` |
-| `JWT_REFRESH_SECRET` | Secret key used to sign Refresh Tokens. | `supersecretjwtrefreshkeyforlocaldev123!` |
-| `POSTGRES_USER` | Admin username for PostgreSQL container. | `securevault` |
-| `POSTGRES_PASSWORD` | Admin password for PostgreSQL container. | `securevault` |
-| `POSTGRES_DB` | Default database name within PostgreSQL. | `securevaultdb` |
+⚠️ Never commit your .env file. Only .env.example is safe to commit, and it must contain no real secrets.
+
+| Variable | Description |
+| :--- | :--- |
+| `DATABASE_URL` | See .env.example — never commit real values |
+| `PORT` | Local binding port for the Express application. |
+| `NODE_ENV` | Application environment state. |
+| `FRONTEND_URL` | Client URL configuration for backend CORS routing. |
+| `BCRYPT_COST_FACTOR` | Work factor multiplier for password hashing. |
+| `JWT_SECRET` | See .env.example — never commit real values |
+| `JWT_REFRESH_SECRET` | See .env.example — never commit real values |
+| `POSTGRES_USER` | Admin username for PostgreSQL container. |
+| `POSTGRES_PASSWORD` | See .env.example — never commit real values |
+| `POSTGRES_DB` | Default database name within PostgreSQL. |
 
 ## API Overview
 
