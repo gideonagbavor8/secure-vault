@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { prisma } from './lib/prisma';
+import { apiLimiter } from './middleware/rateLimiter';
 import rootRouter from './routes/index';
 
 // Load environment variables
@@ -30,6 +31,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   });
   next();
 });
+
+// Apply rate limiting globally to all API routes
+app.use('/api', apiLimiter);
 
 // Health Check Route
 app.get('/api/health', (req: Request, res: Response) => {

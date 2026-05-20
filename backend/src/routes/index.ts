@@ -1,6 +1,10 @@
 import { Router, Request, Response } from 'express';
+import { authLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
+
+// Apply authLimiter to the /auth prefix
+router.use('/auth', authLimiter);
 
 // Future route modules will be mounted here
 // router.use('/auth', authRouter);
