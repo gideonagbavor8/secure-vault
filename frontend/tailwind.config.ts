@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config = {
-  darkMode: ["class"],
+  darkMode: "class",
   content: [
     './pages/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',
@@ -52,11 +52,46 @@ const config = {
           DEFAULT: "var(--card)",
           foreground: "var(--card-foreground)",
         },
+        vault: {
+          primary: {
+            DEFAULT: "#2D6A4F",
+            light: "#40916C",
+            dark: "#52B788",
+          },
+          accent: {
+            DEFAULT: "#B5179E",
+            light: "#CC44BB",
+            dark: "#F72585",
+          },
+          bg: {
+            DEFAULT: "#F0F4F0",
+            surface: "#FFFFFF",
+            dark: "#0D1B2A",
+            "dark-surface": "#112233",
+          },
+          text: {
+            primary: "#1A1A2E",
+            secondary: "#4A5568",
+            "dark-primary": "#E8F4F0",
+            "dark-secondary": "#94A3B8",
+          },
+          border: {
+            DEFAULT: "#CBD5CD",
+            dark: "#1E3A4A",
+          },
+          success: { DEFAULT: "#38A169", dark: "#68D391" },
+          warning: { DEFAULT: "#D97706", dark: "#FBD38D" },
+          danger:  { DEFAULT: "#C53030", dark: "#FC8181" },
+        }
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      fontFamily: {
+        sans: ["Inter", "DM Sans", "system-ui", "sans-serif"],
+        mono: ["JetBrains Mono", "Fira Code", "monospace"],
       },
     },
   },
