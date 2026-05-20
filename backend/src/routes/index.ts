@@ -1,13 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { authLimiter } from '../middleware/rateLimiter';
+import authRouter from './auth.routes';
 
 const router = Router();
 
-// Apply authLimiter to the /auth prefix
-router.use('/auth', authLimiter);
+// Mount Auth routes
+router.use('/auth', authRouter);
 
 // Future route modules will be mounted here
-// router.use('/auth', authRouter);
+// router.use('/vaults', vaultsRouter);
 // router.use('/vaults', vaultsRouter);
 // router.use('/credentials', credentialsRouter);
 // router.use('/audit-logs', auditLogsRouter);
