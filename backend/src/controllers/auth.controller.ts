@@ -208,3 +208,96 @@ export async function logout(req: Request, res: Response, next: NextFunction): P
     next(error);
   }
 }
+
+/**
+ * Handle refresh token rotation.
+ */
+export async function refreshToken(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const rawCookies = req.headers.cookie;
+    const incomingToken = getCookie(rawCookies, 'refreshToken');
+
+    if (!incomingToken) {
+      res.status(401).json({ error: "No refresh token provided" });
+      return;
+    }
+
+    const tokenHash = crypto.createHash('sha256').update(incomingToken).digest('hex');
+
+    // Look up matching token record
+    const storedToken = await prisma.refreshToken.findUnique({
+      where: { tokenHash },
+      include: { user: true },
+    });
+
+    if (!storedToken) {
+      res.status(401).json({ error: "Invalid refresh token" });
+      return;
+    }
+
+    // Token theft detection: if a token has already been revoked, it means someone is attempting reuse!
+    if (storedToken.revoked) {
+      // Revoke all tokens for this user
+      await prisma.refreshToken.updateMany({
+        where: { userId: storedToken.userId },
+        data: { revoked: true },
+      });
+      res.status(401).json({ error: "Invalid refresh token" });
+      return;
+    }
+
+    // Check expiration
+    if (storedToken.expiresAt < new Date()) {
+      res.status(401).json({ error: "Refresh token expired. Please log in again." });
+      return;
+    }
+
+    const user = storedToken.user;
+
+    // Generate new tokens
+    const newAccessToken = generateAccessToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    });
+    const newRefreshToken = generateRefreshToken({ userId: user.id });
+
+    // Mark current token as revoked
+    await prisma.refreshToken.update({
+      where: { id: storedToken.id },
+      data: { revoked: true },
+    });
+
+    // Store new refresh token hash in database
+    const newTokenHash = crypto.createHash('sha256').update(newRefreshToken).digest('hex');
+    const newExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+    await prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: newTokenHash,
+        expiresAt: newExpiresAt,
+      },
+    });
+
+    // Set new refresh token in HTTP-only, Secure, SameSite=Strict cookie
+    res.cookie('refreshToken', newRefreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    // Log token refreshed audit event
+    await logEvent({
+      userId: user.id,
+      action: 'TOKEN_REFRESHED',
+      ipAddress: req.ip || '127.0.0.1',
+      userAgent: req.headers['user-agent'],
+    });
+
+    res.status(200).json({ accessToken: newAccessToken });
+  } catch (error) {
+    next(error);
+  }
+}
