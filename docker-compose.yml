@@ -25,6 +25,7 @@ services:
       - PORT=5000
       - NODE_ENV=development
       - DATABASE_URL=postgresql://${POSTGRES_USER:-securevault}:${POSTGRES_PASSWORD:-securevault}@postgres:5432/${POSTGRES_DB:-securevaultdb}
+      - TEST_DATABASE_URL=postgresql://${POSTGRES_USER:-securevault}:${POSTGRES_PASSWORD:-securevault}@postgres:5432/${POSTGRES_DB:-securevaultdb}_test
       - JWT_SECRET=${JWT_SECRET:-supersecretjwtkeyforlocaldev123!}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-supersecretjwtrefreshkeyforlocaldev123!}
       - BCRYPT_COST_FACTOR=${BCRYPT_COST_FACTOR:-12}

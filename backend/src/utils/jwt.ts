@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 export interface AccessTokenPayload {
   userId: string;
@@ -8,6 +9,7 @@ export interface AccessTokenPayload {
 
 export interface RefreshTokenPayload {
   userId: string;
+  jti?: string;
 }
 
 /**
@@ -34,10 +36,17 @@ export function generateRefreshToken(payload: RefreshTokenPayload): string {
     throw new Error('JWT_REFRESH_SECRET environment variable is not defined.');
   }
 
-  return jwt.sign(payload, secret, {
-    expiresIn: '7d',
-    algorithm: 'HS256',
-  });
+  return jwt.sign(
+    {
+      ...payload,
+      jti: crypto.randomUUID(),
+    },
+    secret,
+    {
+      expiresIn: '7d',
+      algorithm: 'HS256',
+    }
+  );
 }
 
 /**
