@@ -1,11 +1,12 @@
 import { prisma } from '../lib/prisma';
+import { Prisma } from '@prisma/client';
 
 export interface LogEventParams {
   userId: string;
   action: string;
   ipAddress: string;
   userAgent?: string;
-  metadata?: Record<string, any>;
+  metadata?: Prisma.InputJsonValue;
 }
 
 /**
