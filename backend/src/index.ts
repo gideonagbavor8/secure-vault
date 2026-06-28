@@ -1,7 +1,10 @@
 import { prisma } from './lib/prisma';
 import app from './app';
+import { errorHandler } from './middleware/errorHandler';
 
 const PORT = process.env.PORT || 5000;
+
+app.use(errorHandler);
 
 // Start Server & Test Database Connection
 async function startServer() {

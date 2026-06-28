@@ -1,14 +1,14 @@
 import { Router, Request, Response } from 'express';
 import authRouter from './auth.routes';
+import vaultRouter from './vault.routes';
 
 const router = Router();
 
 // Mount Auth routes
 router.use('/auth', authRouter);
+router.use('/vaults', vaultRouter);
 
 // Future route modules will be mounted here
-// router.use('/vaults', vaultsRouter);
-// router.use('/vaults', vaultsRouter);
 // router.use('/credentials', credentialsRouter);
 // router.use('/audit-logs', auditLogsRouter);
 
