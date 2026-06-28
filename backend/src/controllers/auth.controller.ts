@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { hashPassword, comparePassword } from '../utils/hash';
 import { generateAccessToken, generateRefreshToken, generate2FATempToken, verify2FATempToken } from '../utils/jwt';
 import { logEvent } from '../utils/auditLogger';
-import { generateSecret, generateURI, verify } from 'otplib';
+import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
 import bcrypt from 'bcrypt';
 
@@ -347,7 +347,7 @@ export async function setup2FA(req: Request, res: Response, next: NextFunction):
       return;
     }
 
-    const secret = generateSecret();
+    const secret = authenticator.generateSecret();
 
     // Store secret temporarily but keep isTotpEnabled false
     await prisma.user.update({
@@ -358,11 +358,7 @@ export async function setup2FA(req: Request, res: Response, next: NextFunction):
       },
     });
 
-    const uri = generateURI({
-      issuer: 'SecureVault',
-      label: user.email,
-      secret,
-    });
+    const uri = authenticator.keyuri(user.email, 'SecureVault', secret);
     const qrCode = await QRCode.toDataURL(uri);
 
     await logEvent({
@@ -395,7 +391,7 @@ export async function verify2FA(req: Request, res: Response, next: NextFunction)
       return;
     }
 
-    const { valid: isValid } = await verify({ token, secret: user.totpSecret });
+    const isValid = authenticator.verify({ token, secret: user.totpSecret as string });
     if (!isValid) {
       res.status(400).json({ error: "Invalid 2FA code" });
       return;
@@ -518,7 +514,7 @@ export async function twoFactorAuthenticate(req: Request, res: Response, next: N
       return;
     }
 
-    const { valid: isValid } = await verify({ token, secret: user.totpSecret });
+    const isValid = authenticator.verify({ token, secret: user.totpSecret as string });
     if (!isValid) {
       res.status(400).json({ error: "Invalid 2FA code" });
       return;

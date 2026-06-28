@@ -55,6 +55,7 @@ model Credential {
   urlEnc         String?
   notesEnc       String?
   tags           String[]
+  deletedAt      DateTime?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 }
