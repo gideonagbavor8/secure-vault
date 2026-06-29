@@ -19,9 +19,10 @@ export function useVaultMutations(options?: UseVaultMutationsOptions) {
         options.onSuccess();
       }
       return result;
-    } catch (err: any) {
-      setError(err instanceof Error ? err : new Error(err.message || 'Mutation failed'));
-      throw err;
+    } catch (err) {
+      const errorObj = err instanceof Error ? err : new Error(String(err) || 'Mutation failed');
+      setError(errorObj);
+      throw errorObj;
     } finally {
       setIsLoading(false);
     }
