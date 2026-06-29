@@ -13,8 +13,8 @@ export function useVaults() {
     try {
       const data = await getAllVaults();
       setVaults(data);
-    } catch (err: any) {
-      setError(err instanceof Error ? err : new Error(err.message || 'Failed to fetch vaults'));
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error(String(err) || 'Failed to fetch vaults'));
     } finally {
       setIsLoading(false);
     }
